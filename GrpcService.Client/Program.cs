@@ -7,7 +7,8 @@ class Program
     static async Task Main(string[] args)
     {
         using var channel = GrpcChannel.ForAddress("https://localhost:7116");
-        await StreamCurrentWeatherRequest(channel);
+        //await StreamCurrentWeatherRequest(channel);
+        await ClientStreamRequest(channel);
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
@@ -21,31 +22,40 @@ class Program
 
     public static async Task RequestCurrentWeather(GrpcChannel channel)
     {
-        var wClient = new WeatherService.WeatherServiceClient(channel);
-        var wReply = await wClient.GetCurrentWeatherAsync(
-            new GetCurrentWeatherForCityRequest
-            {
-                City = "London",
-                Units = GetCurrentWeatherForCityRequest.Types.Units.Metric,
-            }
+        var client = new WeatherService.WeatherServiceClient(channel);
+        var reply = await client.GetCurrentWeatherAsync(
+            new GetCurrentWeatherForCityRequest { City = "London", Units = Units.Metric }
         );
-        Console.WriteLine($"Temp: {wReply.Temperature}\r\nFL: {wReply.FeelsLike}");
-        Console.WriteLine(wReply);
+        Console.WriteLine($"Temp: {reply.Temperature}\r\nFL: {reply.FeelsLike}");
+        Console.WriteLine(reply);
     }
 
     public static async Task StreamCurrentWeatherRequest(GrpcChannel channel)
     {
-        var sClient = new WeatherService.WeatherServiceClient(channel);
-        using var call = sClient.GetCurrentWeatherStream(
-            new GetCurrentWeatherForCityRequest
-            {
-                City = "London",
-                Units = GetCurrentWeatherForCityRequest.Types.Units.Imperial,
-            }
+        var client = new WeatherService.WeatherServiceClient(channel);
+        using var call = client.GetCurrentWeatherStream(
+            new GetCurrentWeatherForCityRequest { City = "London", Units = Units.Imperial }
         );
         while (await call.ResponseStream.MoveNext(new CancellationToken()))
         {
             Console.WriteLine($"From Server: {call.ResponseStream.Current}");
         }
+    }
+
+    public static async Task ClientStreamRequest(GrpcChannel channel)
+    {
+        var client = new WeatherService.WeatherServiceClient(channel);
+        using var call = client.GetMultiCurrentWeatherStream();
+
+        for (var i = 0; i < 3; i++)
+        {
+            await call.RequestStream.WriteAsync(
+                new GetCurrentWeatherForCityRequest { City = "London", Units = Units.Imperial }
+            );
+        }
+        await call.RequestStream.CompleteAsync();
+
+        var response = await call;
+        Console.WriteLine(response);
     }
 }
