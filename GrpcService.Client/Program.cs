@@ -7,8 +7,7 @@ class Program
     static async Task Main(string[] args)
     {
         using var channel = GrpcChannel.ForAddress("https://localhost:7116");
-        //await StreamCurrentWeatherRequest(channel);
-        await ClientStreamRequest(channel);
+        await PrintStream(channel);
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
@@ -51,6 +50,23 @@ class Program
         {
             await call.RequestStream.WriteAsync(
                 new GetCurrentWeatherForCityRequest { City = "London", Units = Units.Imperial }
+            );
+        }
+        await call.RequestStream.CompleteAsync();
+
+        var response = await call;
+        Console.WriteLine(response);
+    }
+
+    public static async Task PrintStream(GrpcChannel channel)
+    {
+        var client = new WeatherService.WeatherServiceClient(channel);
+        using var call = client.PrintStream();
+
+        for (var i = 0; i < 3; i++)
+        {
+            await call.RequestStream.WriteAsync(
+                new PrintRequest { Message = $"This is request #{i}" }
             );
         }
         await call.RequestStream.CompleteAsync();
