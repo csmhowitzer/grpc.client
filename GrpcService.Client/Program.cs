@@ -1,4 +1,5 @@
-﻿using Grpc.Net.Client;
+﻿using Grpc.Core;
+using Grpc.Net.Client;
 
 namespace GrpcService.Client;
 
@@ -7,7 +8,7 @@ class Program
     static async Task Main(string[] args)
     {
         using var channel = GrpcChannel.ForAddress("https://localhost:7116");
-        await PrintStream(channel);
+        await ChatBiDiStream(channel);
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
@@ -73,5 +74,36 @@ class Program
 
         var response = await call;
         Console.WriteLine(response);
+    }
+
+    public static async Task ChatBiDiStream(GrpcChannel channel)
+    {
+        var client = new Chat.ChatClient(channel);
+        using var call = client.SendMessage();
+
+        Console.WriteLine("Starting task to receive messages");
+        var readTask = Task.Run(async () =>
+        {
+            await foreach (var response in call.ResponseStream.ReadAllAsync())
+            {
+                Console.WriteLine(response);
+            }
+        });
+
+        Console.WriteLine("Starting to send message");
+        Console.WriteLine("Type a message to echo then press enter.");
+        while (true)
+        {
+            var result = Console.ReadLine();
+            if (string.IsNullOrEmpty(result))
+            {
+                break;
+            }
+
+            await call.RequestStream.WriteAsync(new ClientToServerMessage { Message = result });
+        }
+        Console.WriteLine("Disconnecting");
+        await call.RequestStream.CompleteAsync();
+        await readTask;
     }
 }
